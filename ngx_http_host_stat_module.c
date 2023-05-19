@@ -1,49 +1,21 @@
-/**
- * @file   ngx_http_host_stat_module.c
- * @author Ben Chaplin <benchaplin@protonmail.ch>
- * @date   Mon 15 May 2023 06:44:22 PM UTC
- *
- * @brief  A hello world module for Nginx.
- *
- * @section LICENSE
- *
+/*
  * Copyright (C) 2023 by Ben Chaplin <benchaplin@protonmail.ch>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
  */
+
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-
-static char *ngx_http_host_stat(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-static ngx_int_t ngx_http_host_stat_handler(ngx_http_request_t *r);
+static ngx_int_t ngx_http_host_stat_init(ngx_conf_t *cf);
+static ngx_int_t ngx_http_add_host_stat_header(ngx_http_request_t *r);
 
 /**
  * This module provided directive: host_stat
- *
  */
 static ngx_command_t ngx_http_host_stat_commands[] = {
-
     { ngx_string("host_stat"), /* directive */
-      NGX_HTTP_LOC_CONF|NGX_CONF_NOARGS, /* location context and takes
-                                            no arguments*/
-      ngx_http_host_stat, /* configuration setup function */
+      NGX_HTTP_LOC_CONF|NGX_CONF_NOARGS, /* location context and takes no arguments*/
+      ngx_http_add_host_stat_header, /* configuration setup function */
       0, /* No offset. Only one context is supported. */
       0, /* No offset when storing the module configuration on struct. */
       NULL},
@@ -54,7 +26,7 @@ static ngx_command_t ngx_http_host_stat_commands[] = {
 /* The module context. */
 static ngx_http_module_t ngx_http_host_stat_module_ctx = {
     NULL, /* preconfiguration */
-    NULL, /* postconfiguration */
+    ngx_http_host_stat_init, /* postconfiguration */
 
     NULL, /* create main configuration */
     NULL, /* init main configuration */
@@ -83,40 +55,41 @@ ngx_module_t ngx_http_host_stat_module = {
 };
 
 /**
- * Content handler.
+ * Add the Host-Stat header.
  *
  * @param r
  *   Pointer to the request structure. See http_request.h.
  * @return
- *   The status of the response generation.
+ *   Status of the response generation.
  */
-static ngx_int_t ngx_http_host_stat_handler(ngx_http_request_t *r)
+static char *
+ngx_http_add_host_stat_header(ngx_http_request_t *r)
 {
-    /* Sending the headers for the reply. */
-    r->headers_out.status = NGX_HTTP_CREATED; /* 201 status code */
-    
-    return ngx_http_send_header(r); /* Send the headers */
+    ngx_table_elt_t *h = ngx_list_push(&r->headers_out.headers);
+    if (h == NULL) {
+        return NGX_CONF_ERROR;
+    }
+    h->key.data = (u_char *) "Host-Stat";
+    h->key.len = 9;
+    h->value.data = (u_char *) "hey";
+    h->value.len = 3;
+
+    return NGX_CONF_OK;
 }
 
 /**
- * Configuration setup function that installs the content handler.
+ * Configuration setup function that sets up the header chain.
  *
  * @param cf
  *   Module configuration structure pointer.
- * @param cmd
- *   Module directives structure pointer.
- * @param conf
- *   Module configuration structure pointer.
- * @return string
+ * @return
  *   Status of the configuration setup.
  */
-static char *ngx_http_host_stat(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+static ngx_int_t 
+ngx_http_host_stat_init(ngx_conf_t *cf)
 {
-    ngx_http_core_loc_conf_t *clcf; /* pointer to core location configuration */
+    ngx_http_next_header_filter = ngx_http_top_header_filter;
+    ngx_http_top_header_filter = ngx_http_headers_filter;
 
-    /* Install the host stat handler. */
-    clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-    clcf->handler = ngx_http_host_stat_handler;
-
-    return NGX_CONF_OK;
+    return NGX_OK;
 }
